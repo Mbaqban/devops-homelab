@@ -1,0 +1,1 @@
+"This project is the evolution of my previous Kubernetes homelab. The first version focused on understanding Kubernetes workloads. This version focuses on building a reproducible infrastructure using Infrastructure as Code and configuration management."
