@@ -161,5 +161,5 @@ Debian 13
 
 # Install debian 13 in KVM
 
-didnt get to do it..:) i will try tommorow
+didnt get to do it..:) i will try tomorrow
 
