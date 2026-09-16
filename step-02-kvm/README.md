@@ -158,8 +158,3 @@ Debian 13
       default NAT network
 
 ```
-
-# Install debian 13 in KVM
-
-didnt get to do it..:) i will try tomorrow
-
