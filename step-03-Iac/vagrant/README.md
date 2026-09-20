@@ -68,7 +68,7 @@ we will make the custom box that have all of them installed and ready to use.
 mkdir base && cd base
 nano vagrantfile 
 ```
-copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/base/Vagrantfile)
+copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/base/vagrantfile)
 you can do it better than me :)
 
 ### save box to system vagran box list
@@ -236,9 +236,9 @@ vagrant box list
 ```bash
 nano vagrantfile 
 ```
-copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/Vagrantfile)
+copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/vagrantfile)
 you can do it better than me :)
 
 
 
-![alt text](image.png)
+![alt text](image-1.png)
