@@ -64,9 +64,15 @@ we will make the custom box that have all of them installed and ready to use.
 ### Run base image
 
 ```bash
-mkdir newbox && cd newbox
-vagrant init debian/trixie64
-vagrant up --provider=libvirt
+
+mkdir base && cd base
+nano vagrantfile 
+```
+copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/base/Vagrantfile)
+you can do it better than me :)
+
+### save box to system vagran box list
+vagrant box add debian/trixie64
 
 vagrant ssh default
 ```
@@ -207,11 +213,6 @@ ln -s /etc/machine-id /var/lib/dbus/machine-id
 
 kubeadm reset -f
 rm -rf /etc/kubernetes /var/lib/etcd
-
-# Give each VM a unique hostname and static IP — this is critical, Kubernetes really doesn’t like hostname/IP collisions.
-
-hostnamectl set-hostname k8s-master
-# or k8s-worker1, k8s-worker2, k8s-worker3
 ```
 
 
@@ -223,8 +224,6 @@ sudo apt-get update
 sudo apt-get install -y libguestfs-tools
 sudo chmod +r /boot/vmlinuz-*
 
-
-
 vagrant halt
 
 vagrant package --output k8s-base.box
@@ -235,6 +234,11 @@ vagrant box list
 
 ### Use the vagrantfile in this repo
 ```bash
-nano vagrantfile
+nano vagrantfile 
 ```
+copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/Vagrantfile)
+you can do it better than me :)
 
+
+
+![alt text](image.png)

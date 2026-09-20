@@ -1,0 +1,12 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "debian/trixie64"
+
+  config.vm.hostname = "k8s-node"
+
+  config.vm.provider :libvirt do |libvirt|
+    libvirt.memory = 2048
+    libvirt.cpus = 2
+    libvirt.machine_virtual_size = 10
+    libvirt.storage_pool_name = "images"
+  end
+end
