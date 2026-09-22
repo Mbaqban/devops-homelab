@@ -45,9 +45,6 @@ Vagrant.configure("2") do |config|
         swapoff -a
         sed -i '/[[:space:]]swap[[:space:]]/ s/^/#/' /etc/fstab
 
-        # Make sure required directories exist
-        mkdir -p /opt/cni/bin
-        mkdir -p /etc/cni/net.d
       SHELL
 
       # ---------------------------------------------------------

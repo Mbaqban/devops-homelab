@@ -165,7 +165,6 @@ sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable --now kubelet
 
 # verfiy 
-
 kubeadm version
 kubectl version --client
 ```
@@ -173,9 +172,11 @@ kubectl version --client
 ```
 output:
 
--> kubeadm version: &version.Info{Major:"1", Minor:"36", EmulationMajor:"", EmulationMinor:"", MinCompatibilityMajor:"", MinCompatibilityMinor:"", GitVersion:"v1.36.4", GitCommit:"bb826b1d48562f110659e64e8ec444327433db95", GitTreeState:"clean", BuildDate:"2026-08-20T03:08:41Z", GoVersion:"go1.26.5", Compiler:"gc", Platform:"linux/amd64"}
--> Client Version: v1.36.4
--> Kustomize Version: v5.8.1
+kubeadm version: &version.Info{Major:"1", Minor:"36", EmulationMajor:"", EmulationMinor:"", MinCompatibilityMajor:"", MinCompatibilityMinor:"", GitVersion:"v1.36.4", GitCommit:"bb826b1d48562f110659e64e8ec444327433db95", GitTreeState:"clean", BuildDate:"2026-08-20T03:08:41Z", GoVersion:"go1.26.5", Compiler:"gc", Platform:"linux/amd64"}
+
+Client Version: v1.36.4
+
+Kustomize Version: v5.8.1
 ```
 ## Clean up phase
 
@@ -193,15 +194,23 @@ rm -rf /etc/kubernetes /var/lib/etcd
 history -c
 ```
 
+> [!note]
+> Now we can logout from machine and take image of it :)
+```bash
+logout
+```
+
+> [!note]
+> following commands are run in host machine
 
 ## Save the custom box
 
 ```bash
-
 sudo apt-get update
 sudo apt-get install -y libguestfs-tools
 sudo chmod +r /boot/vmlinuz-*
 
+# in dir of machine
 vagrant halt
 
 vagrant package --output k8s-base.box
@@ -220,7 +229,8 @@ k8s-base        (libvirt, 0, (amd64))
 
 # Use the prebuild box to create the cluster
 ```
-We need 4 machines to create one master and 3 workers 
+We need 4 machines
+one master and 3 workers 
 ```
 
 ## Create a network 
@@ -238,7 +248,7 @@ and put this in it
 ```
 
 ```bash
-sudo virsh net-define k8s-network.xml
+sudo virsh net-define k8s-net.xml
 sudo virsh net-start k8s-net  
 sudo virsh net-autostart k8s-net
 
