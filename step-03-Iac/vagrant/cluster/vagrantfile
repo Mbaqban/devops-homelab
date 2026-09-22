@@ -1,9 +1,9 @@
 Vagrant.configure("2") do |config|
   MASTER_IP = "192.168.56.10"
-  TOKEN     = "abcdef.0123456789abcdef"  # fixed bootstrap token, lab-only
+  K8S_NETWORK = "k8s-net"
 
   nodes = [
-    { name: "k8s-master",  ip: MASTER_IP,       cpus: 2, mem: 2048, master: true  },
+    { name: "k8s-master", ip: MASTER_IP, cpus: 2, mem: 2048, master: true },
     { name: "k8s-worker1", ip: "192.168.56.11", cpus: 2, mem: 2048, master: false },
     { name: "k8s-worker2", ip: "192.168.56.12", cpus: 2, mem: 2048, master: false },
     { name: "k8s-worker3", ip: "192.168.56.13", cpus: 2, mem: 2048, master: false },
@@ -11,57 +11,51 @@ Vagrant.configure("2") do |config|
 
   config.vm.box = "k8s-base"
 
+  # Don't mount the project directory into the VMs
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
   nodes.each do |node|
     config.vm.define node[:name] do |n|
       n.vm.hostname = node[:name]
 
+      # Kubernetes network
       n.vm.network "private_network",
         ip: node[:ip],
-        libvirt__network_name: "vagrant-libvirt",
+        libvirt__network_name: K8S_NETWORK,
         libvirt__dhcp_enabled: false
 
+      # VM resources
       n.vm.provider :libvirt do |lv|
         lv.memory = node[:mem]
-        lv.cpus   = node[:cpus]
-        lv.storage_pool_name = "images"
-
+        lv.cpus = node[:cpus]
       end
 
+      # ---------------------------------------------------------
+      # Basic node configuration
+      # ---------------------------------------------------------
+
       n.vm.provision "shell", inline: <<-SHELL
+        set -e
+
+        # Give every VM a unique machine-id
         rm -f /etc/machine-id /var/lib/dbus/machine-id
         systemd-machine-id-setup
+
+        # Kubernetes requires swap to be disabled
+        swapoff -a
+        sed -i '/[[:space:]]swap[[:space:]]/ s/^/#/' /etc/fstab
+
+        # Make sure required directories exist
+        mkdir -p /opt/cni/bin
+        mkdir -p /etc/cni/net.d
       SHELL
 
+      # ---------------------------------------------------------
+      # /etc/hosts
+      # ---------------------------------------------------------
       nodes.each do |peer|
         n.vm.provision "shell",
           inline: "grep -qxF '#{peer[:ip]} #{peer[:name]}' /etc/hosts || echo '#{peer[:ip]} #{peer[:name]}' >> /etc/hosts"
-      end
-
-      if node[:master]
-        n.vm.provision "shell", inline: <<-SHELL
-          if [ ! -f /etc/kubernetes/admin.conf ]; then
-            kubeadm init \
-              --apiserver-advertise-address=#{MASTER_IP} \
-              --pod-network-cidr=10.244.0.0/16 \
-              --token=#{TOKEN} \
-              --token-ttl=0
-
-            mkdir -p /home/vagrant/.kube
-            cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
-            chown vagrant:vagrant /home/vagrant/.kube/config
-
-            export KUBECONFIG=/etc/kubernetes/admin.conf
-            kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
-          fi
-        SHELL
-      else
-        n.vm.provision "shell", inline: <<-SHELL
-          if [ ! -f /etc/kubernetes/kubelet.conf ]; then
-            kubeadm join #{MASTER_IP}:6443 \
-              --token=#{TOKEN} \
-              --discovery-token-unsafe-skip-ca-verification
-          fi
-        SHELL
       end
     end
   end

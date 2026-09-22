@@ -9,16 +9,11 @@ in a real infrastructure environment.
 ## Roadmap
 
 - [x] Step 1 — Debian 13 Host
-- [x] Step 2 — KVM / QEMU / libvirt
-- [ ] Step 3 — Vagrant or Terraform
+- [x] [Step 2 — KVM / QEMU / libvirt](./step-02-kvm/README.md)
+- [ ] [Step 3 — Vagrant or Terraform](./step-03-Iac/README.md)
 - [ ] Step 4 — Ansible
 - [ ] Step 5 — Kubernetes with kubeadm
 - [ ] Step 6 — Helm
 - [ ] Step 7 — Monitoring
 - [ ] Step 8 — Logging
 - [ ] Step 9 — GitOps / Argo CD
-
-## Detailed Documentation
-
-- [Step 2 — KVM / QEMU / libvirt](./step-02-kvm/README.md)
-- [Step 3 — Vagrant or Terraform](./step-03-Iac/README.md)

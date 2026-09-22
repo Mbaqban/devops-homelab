@@ -1,18 +1,20 @@
-- Check virtualization support:
+## Check virtualization support
+
 ```bash 
 lscpu | grep -E 'Virtualization|vmx|svm'
 
-Virtualization:           VT-x 
+-> Virtualization:           VT-x 
 
-# also check kvm
+# check kvm
 ls -l /dev/kvm
-crw-rw----+ 1 root kvm 10, 232 Sep 13 13:02 /dev/kvm
+
+-> crw-rw----+ 1 root kvm 10, 232 Sep 13 13:02 /dev/kvm
 ```
 
-- then install utils 
+## Install utils 
 
 ```bash
-apt update 
+sudo apt update 
 sudo apt install -y \
     qemu-system-x86 \
     qemu-utils \
@@ -22,13 +24,13 @@ sudo apt install -y \
     bridge-utils
 ```
 
-- Enable libvirt
+## Enable libvirt
 
 ```bash
 sudo systemctl enable --now libvirtd
 
-Synchronizing state of libvirtd.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
-Executing: /usr/lib/systemd/systemd-sysv-install enable libvirtd
+-> Synchronizing state of libvirtd.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+-> Executing: /usr/lib/systemd/systemd-sysv-install enable libvirtd
 ```
 
 - Check
@@ -48,23 +50,24 @@ TriggeredBy: ● libvirtd-admin.socket
    Main PID: 22624 (libvirtd)
 ```
 
-- Add your user to the groups
+## Add your user to the groups
 
 ```bash
 sudo usermod -aG libvirt $USER
 sudo usermod -aG kvm $USER
 ```
-
 ```bash
 sudo reboot
 ```
 
-- Check libvirt kvm group
+## Check libvirt kvm group
 
 ```bash
+# after reboot
 groups
 
-cdrom floppy sudo audio dip video plugdev users netdev scanner bluetooth lpadmin >> libvirt kvm <<<
+# look for libvirt and kvm 
+-> cdrom floppy sudo audio dip video plugdev users netdev scanner bluetooth lpadmin >> libvirt kvm <<<
 ```
 
 - Check list of VMs
@@ -88,7 +91,7 @@ Name   State   Autostart   Persistent
 ----------------------------------------
 ```
 
-if *default* not there active it
+- if *default* not there active it
 
 
 ```bash
@@ -121,32 +124,7 @@ KVM acceleration can be used
 ```
 
 
-- We have this for now 
-
-```bash 
-virsh list --all
-virsh net-list --all
-kvm-ok
-
-
- Id   Name   State
------n 13
-    │
-    └── KVM / QEMU
-            │
-         libvirt
-            │
-      default NAT network
-
-```---------------
-
- Name      State    Autostart   Persistent
---------------------------------------------
- default   active   yes         yes
-
-INFO: /dev/kvm exists
-KVM acceleration can be used
-```
+## We have this at the end of this step
 
 ```
 Debian 13
