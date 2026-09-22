@@ -20,9 +20,13 @@ sudo apt update
 sudo apt install -y vagrant
 
 vagrant --version
-
--> Vagrant 2.4.9
 ```
+```
+output:
+
+Vagrant 2.4.9
+```
+
 
 ## Install kvm vagrant plugins
 
@@ -32,11 +36,14 @@ sudo apt install -y ruby-libvirt build-essential libxml2-dev libxslt1-dev zlib1g
 vagrant plugin install vagrant-libvirt
 
 vagrant plugin list                                                                 
+```
+```
+output:
 
--> vagrant-libvirt (0.12.2, global)
+vagrant-libvirt (0.12.2, global)
 ```
 
-### If you wanna test it.
+> If you wanna test it.
 
 ```bash
 # add box to archive to avoid download it every time
@@ -51,7 +58,7 @@ virsh list --all
 ```
 
 
-## Make a custom BOX in vagrant
+## Make a custom box in vagrant
 ```
 to avoid download and install kubeadm and its dependencies
 we will make the custom box that have all of them installed and ready to use.
@@ -59,14 +66,14 @@ we will make the custom box that have all of them installed and ready to use.
 
 
 ### Run base image
-copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/base/vagrantfile)
+> [!note]
+> copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/base/vagrantfile)
 you can do it better than me :)
 ```bash
 mkdir base && cd base
 nano vagrantfile
 
 # after save the file 
-
 vagrant up
 ```
 
@@ -91,7 +98,7 @@ sudo sed -i '/ swap / s/^/#/' /etc/fstab
 
 free -h
 
-               total        used        free      shared  
+              total        used        free      shared  
 Swap:             0B          0B          0B
 ```
 
@@ -161,13 +168,15 @@ sudo systemctl enable --now kubelet
 
 kubeadm version
 kubectl version --client
+```
+
+```
+output:
 
 -> kubeadm version: &version.Info{Major:"1", Minor:"36", EmulationMajor:"", EmulationMinor:"", MinCompatibilityMajor:"", MinCompatibilityMinor:"", GitVersion:"v1.36.4", GitCommit:"bb826b1d48562f110659e64e8ec444327433db95", GitTreeState:"clean", BuildDate:"2026-08-20T03:08:41Z", GoVersion:"go1.26.5", Compiler:"gc", Platform:"linux/amd64"}
 -> Client Version: v1.36.4
 -> Kustomize Version: v5.8.1
-
 ```
-
 ## Clean up phase
 
 ```bash 
@@ -199,43 +208,91 @@ vagrant package --output k8s-base.box
 
 vagrant box add k8s-base k8s-base.box --provider libvirt
 vagrant box list
-
--> debian/trixie64 (libvirt, 13.20260519.1, (amd64))
--> k8s-base        (libvirt, 0, (amd64))
 ```
+```
+output:
+
+debian/trixie64 (libvirt, 13.20260519.1, (amd64))
+k8s-base        (libvirt, 0, (amd64))
+```
+
+
 
 # Use the prebuild box to create the cluster
 ```
 We need 4 machines to create one master and 3 workers 
 ```
-copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/vagrantfile)
+
+## Create a network 
+
+```
+create file name k8s-net.xml
+and put this in it 
+
+<network>
+  <name>k8s-net</name>
+  <forward mode="nat"/>
+  <bridge name="virbr-k8s" stp="on" delay="0"/>
+  <ip address="192.168.56.1" netmask="255.255.255.0"/>
+</network>
+```
+
+```bash
+sudo virsh net-define k8s-network.xml
+sudo virsh net-start k8s-net  
+sudo virsh net-autostart k8s-net
+
+sudo virsh net-list --all
+```
+```
+output:
+
+Name              State      Autostart   Persistent
+------------------------------------------------------
+default           active     yes         yes
+k8s-net           active     yes         yes
+
+```
+
+> [!note]
+> copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/vagrantfile) into a vagrantfile
 you can do it better than me :)
 
 
-
 ```bash
-nano vagrantfile
-
 vagrant up
 
 virsh list --all
-
-
- Id   Name                  State
---------------------------------------
- 2    cluster_k8s-master    running
- 3    cluster_k8s-worker1   running
- 4    cluster_k8s-worker2   running
- 5    cluster_k8s-worker3   running
 ```
+```
+output:
 
+Id   Name                  State
+--------------------------------------
+2    cluster_k8s-master    running
+3    cluster_k8s-worker1   running
+4    cluster_k8s-worker2   running
+5    cluster_k8s-worker3   running
+```
+---
 
+- directory 
+```
+.
+├── base
+│   ├── k8s-base.box
+│   └── Vagrantfile
+└── cluster
+   ├── k8s-net.xml
+   └── vagrantfile
+```
+- diagram
 ```
 Debian 13
     │
     └── KVM / QEMU
             │
-         libvirt
+        libvirt
             │
       k8s-net NAT network
             │

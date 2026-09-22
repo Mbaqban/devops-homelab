@@ -1,14 +1,22 @@
+# Install kvm and qemu
 ## Check virtualization support
 
 ```bash 
 lscpu | grep -E 'Virtualization|vmx|svm'
+```
+```
+output:
 
--> Virtualization:           VT-x 
-
-# check kvm
+Virtualization:           VT-x 
+```
+- check kvm
+```bash
 ls -l /dev/kvm
+```
+```
+output:
 
--> crw-rw----+ 1 root kvm 10, 232 Sep 13 13:02 /dev/kvm
+crw-rw----+ 1 root kvm 10, 232 Sep 13 13:02 /dev/kvm
 ```
 
 ## Install utils 
@@ -28,15 +36,21 @@ sudo apt install -y \
 
 ```bash
 sudo systemctl enable --now libvirtd
+```
+```
+output:
 
--> Synchronizing state of libvirtd.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
--> Executing: /usr/lib/systemd/systemd-sysv-install enable libvirtd
+Synchronizing state of libvirtd.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable libvirtd
 ```
 
 - Check
 
 ```bash
 systemctl status libvirtd
+```
+```
+output:
 
 ● libvirtd.service - libvirt legacy monolithic daemon
      Loaded: loaded (/usr/lib/systemd/system/libvirtd.service; enabled; preset: enabled)
@@ -55,8 +69,7 @@ TriggeredBy: ● libvirtd-admin.socket
 ```bash
 sudo usermod -aG libvirt $USER
 sudo usermod -aG kvm $USER
-```
-```bash
+
 sudo reboot
 ```
 
@@ -65,8 +78,11 @@ sudo reboot
 ```bash
 # after reboot
 groups
+```
+- look for libvirt and kvm 
+```
+output:
 
-# look for libvirt and kvm 
 -> cdrom floppy sudo audio dip video plugdev users netdev scanner bluetooth lpadmin >> libvirt kvm <<<
 ```
 
@@ -74,6 +90,9 @@ groups
 
 ```bash
 virsh list --all
+```
+```
+output:
 
  Id   Name   State
 --------------------
@@ -86,6 +105,9 @@ no virtual machines yet
 
 ```bash
 sudo virsh net-list --all
+```
+```
+output:
 
 Name   State   Autostart   Persistent
 ----------------------------------------
@@ -96,15 +118,11 @@ Name   State   Autostart   Persistent
 
 ```bash
 sudo virsh net-start default
-
-Network default started
-
-# then make it auto start
 sudo virsh net-autostart default
-
-Network default marked as autostarted
-
 sudo virsh net-list --all
+```
+```
+output:
 
 Name      State    Autostart   Persistent
 --------------------------------------------
@@ -117,14 +135,16 @@ default   active   yes         yes
 ```bash
 sudo apt install -y cpu-checker
 sudo kvm-ok
+```
+```
+output:
 
--> INFO: /dev/kvm exists
--> KVM acceleration can be used
+INFO: /dev/kvm exists
+KVM acceleration can be used
 ```
 
-
-## We have this at the end of this step
-
+---
+- diagram
 ```
 Debian 13
     │
