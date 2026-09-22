@@ -116,11 +116,10 @@ default   active   yes         yes
 
 ```bash
 sudo apt install -y cpu-checker
-
 sudo kvm-ok
 
-INFO: /dev/kvm exists
-KVM acceleration can be used
+-> INFO: /dev/kvm exists
+-> KVM acceleration can be used
 ```
 
 
