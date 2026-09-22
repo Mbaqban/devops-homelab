@@ -1,33 +1,30 @@
+require "yaml"
+
+config_data = YAML.load_file("/home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml")
+nodes = config_data["nodes"]
+K8S_NETWORK = config_data["k8s_network"]
+host_pubkey = File.read(File.join(Dir.home, ".ssh", "id_rsa.pub")).strip
+
 Vagrant.configure("2") do |config|
-  MASTER_IP = "192.168.56.10"
-  K8S_NETWORK = "k8s-net"
-
-  nodes = [
-    { name: "k8s-master", ip: MASTER_IP, cpus: 2, mem: 2048, master: true },
-    { name: "k8s-worker1", ip: "192.168.56.11", cpus: 2, mem: 2048, master: false },
-    { name: "k8s-worker2", ip: "192.168.56.12", cpus: 2, mem: 2048, master: false },
-    { name: "k8s-worker3", ip: "192.168.56.13", cpus: 2, mem: 2048, master: false },
-  ]
-
   config.vm.box = "k8s-base"
 
   # Don't mount the project directory into the VMs
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   nodes.each do |node|
-    config.vm.define node[:name] do |n|
-      n.vm.hostname = node[:name]
+    config.vm.define node["name"] do |n|
+      n.vm.hostname = node["name"]
 
       # Kubernetes network
       n.vm.network "private_network",
-        ip: node[:ip],
+        ip: node["ip"],
         libvirt__network_name: K8S_NETWORK,
         libvirt__dhcp_enabled: false
 
       # VM resources
       n.vm.provider :libvirt do |lv|
-        lv.memory = node[:mem]
-        lv.cpus = node[:cpus]
+        lv.memory = node["mem"]
+        lv.cpus = node["cpus"]
       end
 
       # ---------------------------------------------------------
@@ -48,11 +45,23 @@ Vagrant.configure("2") do |config|
       SHELL
 
       # ---------------------------------------------------------
+      # ssh key
+      # ---------------------------------------------------------
+      n.vm.provision "shell", inline: <<-SHELL
+          mkdir -p /home/vagrant/.ssh
+          grep -qxF "#{host_pubkey}" /home/vagrant/.ssh/authorized_keys 2>/dev/null || \
+            echo "#{host_pubkey}" >> /home/vagrant/.ssh/authorized_keys
+          chmod 700 /home/vagrant/.ssh
+          chmod 600 /home/vagrant/.ssh/authorized_keys
+          chown -R vagrant:vagrant /home/vagrant/.ssh
+      SHELL
+
+      # ---------------------------------------------------------
       # /etc/hosts
       # ---------------------------------------------------------
       nodes.each do |peer|
         n.vm.provision "shell",
-          inline: "grep -qxF '#{peer[:ip]} #{peer[:name]}' /etc/hosts || echo '#{peer[:ip]} #{peer[:name]}' >> /etc/hosts"
+          inline: "grep -qxF '#{peer["ip"]} #{peer["name"]}' /etc/hosts || echo '#{peer["ip"]} #{peer["name"]}' >> /etc/hosts"
       end
     end
   end

@@ -1,0 +1,26 @@
+k8s_network: k8s-net
+
+nodes:
+  - name: k8s-master
+    ip: 192.168.56.10
+    cpus: 2
+    mem: 2048
+    master: true
+
+  - name: k8s-worker1
+    ip: 192.168.56.11
+    cpus: 2
+    mem: 2048
+    master: false
+
+  - name: k8s-worker2
+    ip: 192.168.56.12
+    cpus: 2
+    mem: 2048
+    master: false
+
+  - name: k8s-worker3
+    ip: 192.168.56.13
+    cpus: 2
+    mem: 2048
+    master: false
