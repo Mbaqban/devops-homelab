@@ -263,10 +263,53 @@ default           active     yes         yes
 k8s-net           active     yes         yes
 
 ```
+## Make yml file to use share between Ansible & Vagrant
+> [!important]
+> as we need these VMs ip and roles in future in ansible step. i write the [nodes.yaml](../../env/nodes.yaml)
+then read & put it in vagrant file to an array an make the VMs from it.
+
+```
+nodes.yaml:
+
+k8s_network: k8s-net
+
+nodes:
+  - name: k8s-master
+    ip: 192.168.56.10
+    cpus: 2
+    mem: 2048
+    master: true
+
+  - name: k8s-worker1
+    ip: 192.168.56.11
+    cpus: 2
+    mem: 2048
+    master: false
+
+    .
+    .
+    .
+    .
+    .
+```
+
+```
+vagrant file:
+
+config_data = YAML.load_file("/home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml")
+nodes = config_data["nodes"]
+K8S_NETWORK = config_data["k8s_network"]
+
+host_pubkey = File.read(File.join(Dir.home, ".ssh", "id_rsa.pub")).strip
+```
+> [!important]
+> and remember to put host ssh key in to the VMs
+
 
 > [!note]
 > copy or write yourself this [dir/base/vagrantfile](https://github.com/Mbaqban/devops-homelab/blob/main/step-03-Iac/vagrant/cluster/vagrantfile) into a vagrantfile
 you can do it better than me :)
+
 
 
 ```bash
