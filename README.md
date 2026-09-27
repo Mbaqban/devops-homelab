@@ -8,12 +8,17 @@ in a real infrastructure environment.
 
 ## Roadmap
 
-- [x] Step 1 — Debian 13 Host
-- [x] [Step 2 — KVM / QEMU / libvirt](./step-02-kvm/README.md)
-- [ ] [Step 3 — Vagrant or Terraform](./step-03-Iac/README.md)
-- [ ] Step 4 — Ansible
-- [ ] Step 5 — Kubernetes with kubeadm
-- [ ] Step 6 — Helm
-- [ ] Step 7 — Monitoring
-- [ ] Step 8 — Logging
-- [ ] Step 9 — GitOps / Argo CD
+* [x] **Step 1 — Debian 13 Host**</br>
+  Prepare the Debian 13 host system as the foundation for the homelab.
+
+* [x] **[Step 2 — KVM / QEMU / libvirt](./step-02-kvm/README.md)**</br>
+  Set up virtualization with KVM, QEMU, and libvirt for running the lab VMs.
+
+* [ ] **[Step 3 — Vagrant or Terraform](./step-03-Iac/README.md)**</br>
+  Automate VM creation and infrastructure provisioning using Infrastructure as Code.
+
+* [ ] **Step 4 — Kubernetes with kubeadm**</br>
+  Use Ansible to configure the prepared Kubernetes nodes and automate cluster initialization with kubeadm.
+  
+* [ ] **Step 5 — GitOps / Argo CD**</br>
+  Implement GitOps with Argo CD to continuously synchronize Kubernetes resources from Git.
