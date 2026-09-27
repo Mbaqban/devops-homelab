@@ -17,7 +17,7 @@ in a real infrastructure environment.
 * [ ] **[Step 3 — Vagrant or Terraform](./step-03-Iac/README.md)**</br>
   Automate VM creation and infrastructure provisioning using Infrastructure as Code.
 
-* [ ] **Step 4 — Kubernetes with kubeadm**</br>
+* [ ] **[Step 4 — Kubernetes with kubeadm](./step-04-Ansible/README.md)**</br>
   Use Ansible to configure the prepared Kubernetes nodes and automate cluster initialization with kubeadm.
   
 * [ ] **Step 5 — GitOps / Argo CD**</br>

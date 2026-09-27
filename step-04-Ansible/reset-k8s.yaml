@@ -1,0 +1,160 @@
+# ---------------------------------------------------------
+# Build dynamic inventory from nodes.yml
+# ---------------------------------------------------------
+
+- name: Build dynamic inventory
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
+
+  tasks:
+
+    - name: Add all Kubernetes nodes
+      add_host:
+        name: "{{ item.name }}"
+        ansible_host: "{{ item.ip }}"
+        groups: k8s_nodes
+      loop: "{{ nodes }}"
+
+
+# ---------------------------------------------------------
+# Reset Kubernetes on all nodes
+# ---------------------------------------------------------
+
+- name: Reset Kubernetes cluster
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+
+  tasks:
+
+    # -----------------------------------------------------
+    # Reset kubeadm
+    # -----------------------------------------------------
+
+    - name: Reset kubeadm
+      command:
+        argv:
+          - kubeadm
+          - reset
+          - -f
+      failed_when: false
+      changed_when: true
+
+    # -----------------------------------------------------
+    # Stop kubelet
+    # -----------------------------------------------------
+
+    - name: Stop kubelet
+      systemd:
+        name: kubelet
+        state: stopped
+      failed_when: false
+
+    # -----------------------------------------------------
+    # Remove Kubernetes state
+    # -----------------------------------------------------
+
+    - name: Remove Kubernetes directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /etc/cni/net.d
+        - /var/lib/cni
+
+    # -----------------------------------------------------
+    # Remove kubeconfig
+    # -----------------------------------------------------
+
+    - name: Remove user kubeconfig
+      file:
+        path: "/home/{{ ansible_user }}/.kube"
+        state: absent
+
+    # -----------------------------------------------------
+    # Remove CNI interfaces
+    # -----------------------------------------------------
+
+    - name: Remove cni0 interface
+      command:
+        argv:
+          - ip
+          - link
+          - delete
+          - cni0
+      failed_when: false
+      changed_when: true
+
+    - name: Remove flannel interface
+      command:
+        argv:
+          - ip
+          - link
+          - delete
+          - flannel.1
+      failed_when: false
+      changed_when: true
+
+    # -----------------------------------------------------
+    # Clean Kubernetes iptables rules
+    # -----------------------------------------------------
+
+    - name: Flush NAT iptables
+      command:
+        argv:
+          - iptables
+          - -t
+          - nat
+          - -F
+      failed_when: false
+      changed_when: true
+
+    - name: Flush filter iptables
+      command:
+        argv:
+          - iptables
+          - -F
+      failed_when: false
+      changed_when: true
+
+    # -----------------------------------------------------
+    # Restart container runtime
+    # -----------------------------------------------------
+
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+
+    # -----------------------------------------------------
+    # Enable kubelet
+    # -----------------------------------------------------
+
+    - name: Enable kubelet
+      systemd:
+        name: kubelet
+        enabled: true
+
+    # -----------------------------------------------------
+    # Remove Kubernetes host entries
+    # -----------------------------------------------------
+
+    - name: Remove Kubernetes host entries
+      lineinfile:
+        path: /etc/hosts
+        regexp: '.*k8s-(master|worker)[0-9]*.*'
+        state: absent
+
+    # -----------------------------------------------------
+    # Completion
+    # -----------------------------------------------------
+
+    - name: Reset completed
+      debug:
+        msg: "Kubernetes reset completed on {{ inventory_hostname }}"
