@@ -1,425 +1,415 @@
-# ---------------------------------------------------------
-# Build dynamic inventory from nodes.yml
-# ---------------------------------------------------------
+---
+# Everything in one file. Put it next to env.yml and run:
+#   ansible-playbook k8s-cluster-all-in-one.yml
+#
+# 1. reads env.yml and writes inventory.ini (also loads the hosts in memory)
+# 2. prepares the nodes, runs kubeadm init on the first master (kube-vip + Flannel)
+# 3. joins the other masters (one by one), then the workers
+# Assumes kubeadm, kubelet, kubectl and a container runtime are already installed.
 
-- name: Build dynamic inventory from nodes.yml
+# ---------------------------------------------------------------------------
+- name: Read env.yml, create inventory.ini and load the hosts
   hosts: localhost
+  connection: local
   gather_facts: false
-
   vars_files:
-    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
-
+    - /home/mbaqban/Projects/env/nodes.yaml
+  vars:
+    ssh_user: vagrant
+    ssh_private_key: /home/mbaqban/.ssh/id_ed25519
+    masters: "{{ nodes | selectattr('master') | list }}"
+    workers: "{{ nodes | rejectattr('master') | list }}"
   tasks:
+    - name: Make sure there is at least one master
+      ansible.builtin.assert:
+        that: masters | length > 0
+        fail_msg: "env.yml needs at least one node with master: true"
 
-    - name: Add master nodes
-      add_host:
+    - name: Write inventory.ini
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/inventory.ini"
+        mode: "0644"
+        content: |
+          # Generated from env.yml - do not edit by hand
+
+          [first_master]
+          {{ masters[0].name }} ansible_host={{ masters[0].ip }} node_ip={{ masters[0].ip }}
+
+          [other_masters]
+          {% for n in masters[1:] %}
+          {{ n.name }} ansible_host={{ n.ip }} node_ip={{ n.ip }}
+          {% endfor %}
+
+          [masters:children]
+          first_master
+          other_masters
+
+          [workers]
+          {% for n in workers %}
+          {{ n.name }} ansible_host={{ n.ip }} node_ip={{ n.ip }}
+          {% endfor %}
+
+          [k8s:children]
+          masters
+          workers
+
+          [k8s:vars]
+          ansible_user={{ ssh_user }}
+          ansible_ssh_private_key_file={{ ssh_private_key }}
+          ansible_become=true
+          ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+    - name: Load first master into the running inventory
+      ansible.builtin.add_host:
         name: "{{ item.name }}"
+        groups: [k8s, masters, first_master]
         ansible_host: "{{ item.ip }}"
-        groups: master
-      loop: "{{ nodes }}"
-      when: item.master
+        node_ip: "{{ item.ip }}"
+        ansible_user: "{{ ssh_user }}"
+        ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+        ansible_become: true
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      loop: "{{ masters[:1] }}"
 
-    - name: Add worker nodes
-      add_host:
+    - name: Load other masters into the running inventory
+      ansible.builtin.add_host:
         name: "{{ item.name }}"
+        groups: [k8s, masters, other_masters]
         ansible_host: "{{ item.ip }}"
-        groups: workers
-      loop: "{{ nodes }}"
-      when: not item.master
+        node_ip: "{{ item.ip }}"
+        ansible_user: "{{ ssh_user }}"
+        ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+        ansible_become: true
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      loop: "{{ masters[1:] }}"
 
+    - name: Load workers into the running inventory
+      ansible.builtin.add_host:
+        name: "{{ item.name }}"
+        groups: [k8s, workers]
+        ansible_host: "{{ item.ip }}"
+        node_ip: "{{ item.ip }}"
+        ansible_user: "{{ ssh_user }}"
+        ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+        ansible_become: true
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      loop: "{{ workers }}"
 
-# ---------------------------------------------------------
-# Prepare primary control-plane
-# ---------------------------------------------------------
-
-- name: Prepare primary control-plane
-  hosts: k8s-master
+# ---------------------------------------------------------------------------
+- name: Prepare all nodes
+  hosts: k8s
   become: true
-
+  gather_facts: true
   vars_files:
-    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
-
+    - /home/mbaqban/Projects/env/nodes.yaml
   tasks:
+    - name: Detect the interface that carries this node's IP
+      ansible.builtin.set_fact:
+        node_iface: >-
+          {{ ansible_facts.interfaces
+             | map('regex_replace', '[-.]', '_')
+             | map('extract', ansible_facts)
+             | selectattr('ipv4', 'defined')
+             | selectattr('ipv4.address', 'equalto', node_ip)
+             | map(attribute='device')
+             | first }}
 
-    # -----------------------------------------------------
-    # Discover the interface that owns ansible_host
-    # -----------------------------------------------------
+    - name: Pin kubelet to the node IP (avoids picking the NAT NIC)
+      ansible.builtin.copy:
+        dest: /etc/default/kubelet
+        content: "KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}\n"
+        mode: "0644"
 
-    - name: Find Kubernetes network interface
-      shell: |
-        ip -o -4 addr show |
-        awk '$4 ~ /^{{ ansible_host }}\// {print $2; exit}'
-      register: k8s_interface_raw
+      
+# ---------------------------------------------------------------------------
+- name: Create containerd CNI binary directory
+  hosts: k8s
+  become: true
+  tasks:
+    # your existing preparation tasks...
+
+    - name: Create containerd CNI binary directory
+      ansible.builtin.file:
+        path: /usr/lib/cni
+        state: directory
+        mode: "0755"
+
+    - name: Link CNI plugins for containerd
+      ansible.builtin.shell:
+        cmd: "ln -sf /opt/cni/bin/* /usr/lib/cni/"
       changed_when: false
 
-    - name: Save Kubernetes network interface
-      set_fact:
-        k8s_interface: "{{ k8s_interface_raw.stdout | trim }}"
+    - name: Restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
 
-    - name: Verify Kubernetes network interface
-      assert:
-        that:
-          - k8s_interface | length > 0
-        fail_msg: >-
-          Could not find the network interface for
-          {{ ansible_host }}.
+# ---------------------------------------------------------------------------
+- name: Bootstrap the first control-plane node
+  hosts: first_master
+  become: true
+  vars_files:
+    - /home/mbaqban/Projects/env/nodes.yaml
+  vars:
+    # kube-vip static pod; kube_vip_kubeconfig is set per task below
+    control_plane_endpoint: "192.168.56.20:6443"
+    kube_vip_manifest: &kube_vip_manifest |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-vip
+        namespace: kube-system
+      spec:
+        containers:
+          - name: kube-vip
+            image: ghcr.io/kube-vip/kube-vip:{{ kube_vip_version }}
+            imagePullPolicy: IfNotPresent
+            args:
+              - manager
+            env:
+              - name: vip_arp
+                value: "true"
+              - name: port
+                value: "{{ control_plane_endpoint.split(':')[1] }}"
+              - name: vip_nodename
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: vip_interface
+                value: "{{ node_iface }}"
+              - name: vip_subnet
+                value: "32"
+              - name: dns_mode
+                value: first
+              - name: cp_enable
+                value: "true"
+              - name: cp_namespace
+                value: kube-system
+              - name: vip_leaderelection
+                value: "true"
+              - name: vip_leasename
+                value: plndr-cp-lock
+              - name: vip_leaseduration
+                value: "5"
+              - name: vip_renewdeadline
+                value: "3"
+              - name: vip_retryperiod
+                value: "1"
+              - name: address
+                value: "{{ control_plane_endpoint.split(':')[0] }}"
+            securityContext:
+              capabilities:
+                add:
+                  - NET_ADMIN
+                  - NET_RAW
+            volumeMounts:
+              - mountPath: /etc/kubernetes/admin.conf
+                name: kubeconfig
+        hostAliases:
+          - hostnames:
+              - kubernetes
+            ip: 127.0.0.1
+        hostNetwork: true
+        volumes:
+          - name: kubeconfig
+            hostPath:
+              path: {{ kube_vip_kubeconfig }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  tasks:
+    - name: Check whether the cluster is already initialised
+      ansible.builtin.stat:
+        path: /etc/kubernetes/admin.conf
+      register: admin_conf
 
-    # -----------------------------------------------------
-    # Prepare kube-vip static pod directory
-    # -----------------------------------------------------
-
-    - name: Create Kubernetes static pod directory
-      file:
+    - name: Ensure the static pod manifest directory exists
+      ansible.builtin.file:
         path: /etc/kubernetes/manifests
         state: directory
-        mode: '0755'
+        mode: "0755"
 
-    # -----------------------------------------------------
-    # Pull kube-vip image used to generate the manifest
-    # -----------------------------------------------------
+    # Since k8s 1.29 kubeadm creates super-admin.conf; kube-vip needs it
+    # during init because admin.conf has no RBAC rights until init finishes.
+    - name: Install kube-vip static pod (bootstrap kubeconfig)
+      ansible.builtin.copy:
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        content: "{{ kube_vip_manifest }}"
+        mode: "0600"
+      vars:
+        kube_vip_kubeconfig: /etc/kubernetes/super-admin.conf
+      when: not admin_conf.stat.exists
 
-    - name: Pull kube-vip image
-      command:
-        argv:
-          - ctr
-          - image
-          - pull
-          - "ghcr.io/kube-vip/kube-vip:{{ kube_vip_version }}"
+    - name: kubeadm init
+      ansible.builtin.command:
+        cmd: >-
+          kubeadm init
+          --control-plane-endpoint {{ control_plane_endpoint }}
+          --apiserver-advertise-address {{ node_ip }}
+          --pod-network-cidr {{ pod_cidr }}
+          --node-name {{ inventory_hostname }}
+          --ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Switch kube-vip to the regular admin.conf
+      ansible.builtin.copy:
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        content: "{{ kube_vip_manifest }}"
+        mode: "0600"
+      vars:
+        kube_vip_kubeconfig: /etc/kubernetes/admin.conf
+
+    # kubelet restarts kube-vip after the manifest switch, which drops the VIP
+    # for a moment. Require ~45s of uninterrupted API access through the VIP.
+    - name: Wait until the API is stable behind the VIP
+      ansible.builtin.shell: |
+        for i in $(seq 1 9); do
+          kubectl get --raw /readyz >/dev/null 2>&1 || exit 1
+          sleep 5
+        done
+      args:
+        executable: /bin/bash
+      register: vip_stable
+      until: vip_stable.rc == 0
+      retries: 20
+      delay: 10
       changed_when: false
 
-    # -----------------------------------------------------
-    # Generate kube-vip static pod manifest
-    #
-    # super-admin.conf is used during kubeadm bootstrap.
-    # It will be changed to admin.conf after kubeadm init.
-    # -----------------------------------------------------
+    - name: Download the Flannel manifest
+      ansible.builtin.get_url:
+        url: "{{ flannel_manifest_url }}"
+        dest: /tmp/kube-flannel.yml
+        force: true
+        mode: "0644"
 
-    - name: Generate kube-vip static pod manifest
-      shell: |
-        ctr run \
-          --rm \
-          --net-host \
-          "ghcr.io/kube-vip/kube-vip:{{ kube_vip_version }}" \
-          kube-vip-generator \
-          /kube-vip \
-          manifest pod \
-          --interface "{{ k8s_interface }}" \
-          --address "{{ control_plane_endpoint.split(':')[0] }}" \
-          --controlplane \
-          --arp \
-          --leaderElection \
-          --k8sConfigPath /etc/kubernetes/super-admin.conf \
-          > /etc/kubernetes/manifests/kube-vip.yaml
-      args:
-        creates: /etc/kubernetes/manifests/kube-vip.yaml
+    - name: Make Flannel use the node-IP interface
+      ansible.builtin.replace:
+        path: /tmp/kube-flannel.yml
+        regexp: '^(\s*)- --kube-subnet-mgr$'
+        replace: '\1- --kube-subnet-mgr\n\1- --iface={{ flannel_iface | default(node_iface) }}'
 
-    # -----------------------------------------------------
-    # Verify kube-vip manifest exists
-    # -----------------------------------------------------
+    - name: Match Flannel's network to pod_cidr
+      ansible.builtin.replace:
+        path: /tmp/kube-flannel.yml
+        regexp: '"Network": "[0-9./]+"'
+        replace: '"Network": "{{ pod_cidr }}"'
 
-    - name: Verify kube-vip manifest
-      stat:
-        path: /etc/kubernetes/manifests/kube-vip.yaml
-      register: kube_vip_manifest
+    - name: Apply Flannel
+      ansible.builtin.command: kubectl apply -f /tmp/kube-flannel.yml
+      register: flannel
+      until: flannel.rc == 0
+      retries: 5
+      delay: 10
+      changed_when: "'created' in flannel.stdout or 'configured' in flannel.stdout"
 
-    - name: Verify kube-vip manifest was created
-      assert:
-        that:
-          - kube_vip_manifest.stat.exists
-        fail_msg: "kube-vip manifest was not created."
+    - name: Create a fresh join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: join_cmd
+      changed_when: false
 
+    - name: Force join command to use the Kubernetes VIP
+      ansible.builtin.set_fact:
+        join_command: >-
+          {{ join_cmd.stdout
+            | regex_replace(
+                '^kubeadm join \S+',
+                'kubeadm join ' ~ control_plane_endpoint
+              ) }}
 
-# ---------------------------------------------------------
-# Initialize the first control-plane
-# ---------------------------------------------------------
-
-- name: Initialize primary control-plane
-  hosts: k8s-master
-  become: true
-
-  vars_files:
-    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
-
-  tasks:
-
-    # -----------------------------------------------------
-    # Kubeadm configuration
-    # -----------------------------------------------------
-
-    - name: Create kubeadm configuration
-      copy:
-        dest: /root/kubeadm-config.yaml
-        mode: '0600'
+    - name: Create kubeadm config for upload-certs
+      ansible.builtin.copy:
+        dest: /tmp/kubeadm-upload-certs.yaml
+        mode: "0600"
         content: |
           apiVersion: kubeadm.k8s.io/v1beta4
           kind: InitConfiguration
-
           localAPIEndpoint:
-            advertiseAddress: "{{ ansible_host }}"
+            advertiseAddress: "{{ node_ip }}"
             bindPort: 6443
-
-          nodeRegistration:
-            kubeletExtraArgs:
-              - name: node-ip
-                value: "{{ ansible_host }}"
-
           ---
           apiVersion: kubeadm.k8s.io/v1beta4
           kind: ClusterConfiguration
-
-          kubernetesVersion: "v1.36.4"
-
           controlPlaneEndpoint: "{{ control_plane_endpoint }}"
-
-          networking:
-            podSubnet: "{{ pod_cidr }}"
-
-          apiServer:
-            certSANs:
-              - "{{ ansible_host }}"
-              - "{{ control_plane_endpoint.split(':')[0] }}"
-
-    # -----------------------------------------------------
-    # Initialize Kubernetes
-    # -----------------------------------------------------
-
-    - name: Initialize Kubernetes cluster
-      command:
-        argv:
-          - kubeadm
-          - init
-          - --config
-          - /root/kubeadm-config.yaml
-          - --upload-certs
-      args:
-        creates: /etc/kubernetes/admin.conf
-      register: kubeadm_init
-
-    # -----------------------------------------------------
-    # kube-vip initially uses super-admin.conf.
-    #
-    # After kubeadm has created admin.conf, switch kube-vip
-    # to the normal admin kubeconfig.
-    # -----------------------------------------------------
-
-    - name: Change kube-vip kubeconfig to admin.conf
-      replace:
-        path: /etc/kubernetes/manifests/kube-vip.yaml
-        regexp: /etc/kubernetes/super-admin.conf
-        replace: /etc/kubernetes/admin.conf
-
-    # -----------------------------------------------------
-    # Wait for Kubernetes API through the VIP
-    # -----------------------------------------------------
-
-    - name: Wait for Kubernetes API VIP
-      wait_for:
-        host: "{{ control_plane_endpoint.split(':')[0] }}"
-        port: 6443
-        timeout: 120
-
-    # -----------------------------------------------------
-    # Configure kubectl
-    # -----------------------------------------------------
-
-    - name: Create .kube directory
-      file:
-        path: "/home/{{ ansible_user }}/.kube"
-        state: directory
-        owner: "{{ ansible_user }}"
-        mode: '0755'
-
-    - name: Copy admin.conf
-      copy:
-        src: /etc/kubernetes/admin.conf
-        dest: "/home/{{ ansible_user }}/.kube/config"
-        remote_src: true
-        owner: "{{ ansible_user }}"
-        mode: '0600'
-
-    # -----------------------------------------------------
-    # Install Flannel
-    # -----------------------------------------------------
-
-    - name: Install Flannel CNI
-      become_user: "{{ ansible_user }}"
-      command:
-        argv:
-          - kubectl
-          - apply
-          - -f
-          - "{{ flannel_manifest_url }}"
+          
+    - name: Upload control-plane certs and get the certificate key
+      ansible.builtin.command:
+        cmd: >-
+          kubeadm init phase upload-certs
+          --upload-certs
+          --config /tmp/kubeadm-upload-certs.yaml
       environment:
-        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cert_out
       changed_when: false
 
-    # -----------------------------------------------------
-    # Generate worker join command
-    # -----------------------------------------------------
+    - name: Keep join data for the other nodes
+      ansible.builtin.set_fact:
+        certificate_key: "{{ cert_out.stdout_lines | last }}"
 
-    - name: Generate worker join command
-      command:
-        kubeadm token create --print-join-command
-      register: worker_join_command_raw
-
-    - name: Save worker join command
-      set_fact:
-        worker_join_command: "{{ worker_join_command_raw.stdout }}"
-
-    # -----------------------------------------------------
-    # Extract certificate key
-    # -----------------------------------------------------
-
-    - name: Extract control-plane certificate key
-      set_fact:
-        certificate_key: >-
-          {{
-            kubeadm_init.stdout
-            | regex_search('certificate key:\s*([a-f0-9]{64})', '\1')
-            | first
-          }}
-
-    - name: Verify certificate key was extracted
-      assert:
-        that:
-          - certificate_key is defined
-          - certificate_key | length == 64
-        fail_msg: "Could not extract the kubeadm certificate key."
-
-    # -----------------------------------------------------
-    # Generate control-plane join command
-    # -----------------------------------------------------
-
-    - name: Generate control-plane join command
-      command:
-        kubeadm token create --print-join-command
-      register: control_plane_join_raw
-
-    - name: Save control-plane join command
-      set_fact:
-        control_plane_join_command: >-
-          {{ control_plane_join_raw.stdout }}
-          --control-plane
-          --certificate-key {{ certificate_key }}
-
-
-# ---------------------------------------------------------
-# Join additional control-plane nodes
-# ---------------------------------------------------------
-
-- name: Join additional control-plane nodes
-  hosts: master
-  become: true
-
-  vars_files:
-    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
-
-  tasks:
-
-    - name: Join control-plane
-      command: "{{ hostvars['k8s-master'].control_plane_join_command }}"
-      args:
-        creates: /etc/kubernetes/admin.conf
-      when: inventory_hostname != "k8s-master"
-
-    # -----------------------------------------------------
-    # Discover interface on this control-plane
-    # -----------------------------------------------------
-
-    - name: Find Kubernetes network interface
-      shell: |
-        ip -o -4 addr show |
-        awk '$4 ~ /^{{ ansible_host }}\// {print $2; exit}'
-      register: k8s_interface_raw
-      changed_when: false
-      when: inventory_hostname != "k8s-master"
-
-    - name: Save Kubernetes network interface
-      set_fact:
-        k8s_interface: "{{ k8s_interface_raw.stdout | trim }}"
-      when: inventory_hostname != "k8s-master"
-
-    - name: Verify Kubernetes network interface
-      assert:
-        that:
-          - k8s_interface | length > 0
-        fail_msg: >-
-          Could not find the network interface for
-          {{ ansible_host }}.
-      when: inventory_hostname != "k8s-master"
-
-    # -----------------------------------------------------
-    # Create kube-vip manifest for this control-plane
-    # -----------------------------------------------------
-
-    - name: Create Kubernetes static pod directory
-      file:
-        path: /etc/kubernetes/manifests
-        state: directory
-        mode: '0755'
-      when: inventory_hostname != "k8s-master"
-
-    - name: Pull kube-vip image
-      command:
-        argv:
-          - ctr
-          - image
-          - pull
-          - "ghcr.io/kube-vip/kube-vip:{{ kube_vip_version }}"
-      changed_when: false
-      when: inventory_hostname != "k8s-master"
-
-    - name: Generate kube-vip static pod manifest
-      shell: |
-        ctr run \
-          --rm \
-          --net-host \
-          "ghcr.io/kube-vip/kube-vip:{{ kube_vip_version }}" \
-          kube-vip-generator \
-          /kube-vip \
-          manifest pod \
-          --interface "{{ k8s_interface }}" \
-          --address "{{ control_plane_endpoint.split(':')[0] }}" \
-          --controlplane \
-          --arp \
-          --leaderElection \
-          --k8sConfigPath /etc/kubernetes/admin.conf \
-          > /etc/kubernetes/manifests/kube-vip.yaml
-      when: inventory_hostname != "k8s-master"
-
-    # -----------------------------------------------------
-    # Configure kubectl
-    # -----------------------------------------------------
-
-    - name: Create .kube directory
-      file:
-        path: "/home/{{ ansible_user }}/.kube"
-        state: directory
-        owner: "{{ ansible_user }}"
-        mode: '0755'
-      when: inventory_hostname != "k8s-master"
-
-    - name: Copy admin.conf
-      copy:
+    - name: Copy admin.conf to the controller
+      ansible.builtin.fetch:
         src: /etc/kubernetes/admin.conf
-        dest: "/home/{{ ansible_user }}/.kube/config"
-        remote_src: true
-        owner: "{{ ansible_user }}"
-        mode: '0600'
-      when: inventory_hostname != "k8s-master"
+        dest: "{{ playbook_dir }}/admin.conf"
+        flat: true
 
+# ---------------------------------------------------------------------------
+- name: Join the remaining control-plane nodes (one at a time)
+  hosts: other_masters
+  become: true
+  serial: 1
+  vars_files:
+    - /home/mbaqban/Projects/env/nodes.yaml
+  vars:
+    first: "{{ groups['first_master'][0] }}"
+    kube_vip_manifest: *kube_vip_manifest
+  tasks:
+    - name: kubeadm join --control-plane
+      ansible.builtin.command:
+        cmd: >-
+          {{ hostvars[first].join_command }}
+          --control-plane
+          --certificate-key {{ hostvars[first].certificate_key }}
+          --apiserver-advertise-address {{ node_ip }}
+          --node-name {{ inventory_hostname }}
+        creates: /etc/kubernetes/kubelet.conf
 
-# ---------------------------------------------------------
-# Join worker nodes
-# ---------------------------------------------------------
+    - name: Install kube-vip static pod (after join, VIP is already held)
+      ansible.builtin.copy:
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        content: "{{ kube_vip_manifest }}"
+        mode: "0600"
+      vars:
+        kube_vip_kubeconfig: /etc/kubernetes/admin.conf
 
-- name: Join worker nodes
+# ---------------------------------------------------------------------------
+- name: Join the workers
   hosts: workers
   become: true
-
+  vars:
+    first: "{{ groups['first_master'][0] }}"
   tasks:
-
-    - name: Join worker
-      command: "{{ hostvars['k8s-master'].worker_join_command }}"
-      args:
+    - name: kubeadm join
+      ansible.builtin.command:
+        cmd: >-
+          {{ hostvars[first].join_command }}
+          --node-name {{ inventory_hostname }}
         creates: /etc/kubernetes/kubelet.conf
+
+# ---------------------------------------------------------------------------
+- name: Verify the cluster
+  hosts: first_master
+  become: true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  tasks:
+    - name: Wait for all nodes to be Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready node --all --timeout=300s
+      changed_when: false
+
+    - name: List nodes
+      ansible.builtin.command: kubectl get nodes -o wide
+      register: nodes_out
+      changed_when: false
+
+    - name: Show nodes
+      ansible.builtin.debug:
+        var: nodes_out.stdout_lines

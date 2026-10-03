@@ -2,3 +2,5 @@ localfiles
 *.vagrant
 *.kubeconfig
 comands
+TODOS
+*inventory.ini

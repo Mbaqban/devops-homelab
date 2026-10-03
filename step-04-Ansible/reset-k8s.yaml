@@ -7,7 +7,7 @@
   gather_facts: false
 
   vars_files:
-    - /home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml
+    - /home/mbaqban/Projects/env/nodes.yaml
 
   tasks:
 
