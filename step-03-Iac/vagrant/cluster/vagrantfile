@@ -1,6 +1,6 @@
 require "yaml"
 
-config_data = YAML.load_file("/home/mbaqban/Projects/env/nodes.yaml")
+config_data = YAML.load_file("/home/mbaqban/projects/KVMTEST/proj/env/nodes.yaml")
 nodes = config_data["nodes"]
 K8S_NETWORK = config_data["k8s_network"]
 host_pubkey = File.read(File.join(Dir.home, ".ssh", "id_rsa.pub")).strip

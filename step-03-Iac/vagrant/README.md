@@ -97,6 +97,10 @@ sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
 
 free -h
+```
+
+```
+output:
 
               total        used        free      shared  
 Swap:             0B          0B          0B
@@ -133,13 +137,16 @@ sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml
 ```
 
-## Change cgroup driver 
+## Change cgroup driver & bin_dir
 
 ```bash 
 # By setting SystemdCgroup = true in containerd’s config, we make containerd use the same cgroup driver (systemd) as kubelet and the OS itself — keeping everything consistent and avoiding those conflicts.
 
 nano /etc/containerd/config.toml
+
+
 change -> SystemdCgroup = true
+chabge -> bin_dir = "/opt/cni/bin"
 
 
 sudo systemctl restart containerd
