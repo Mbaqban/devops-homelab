@@ -131,8 +131,8 @@ sudo sysctl --system
 ## Install containerd
 
 ```bash 
-sudo apt-get update
-sudo apt-get install -y containerd
+sudo apt update
+sudo apt install containerd
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml
 ```
@@ -142,7 +142,7 @@ containerd config default | sudo tee /etc/containerd/config.toml
 ```bash 
 # By setting SystemdCgroup = true in containerd’s config, we make containerd use the same cgroup driver (systemd) as kubelet and the OS itself — keeping everything consistent and avoiding those conflicts.
 
-nano /etc/containerd/config.toml
+sudo nano /etc/containerd/config.toml
 
 
 change -> SystemdCgroup = true
@@ -157,8 +157,8 @@ sudo systemctl enable containerd
 ## Add Kubernetes repo
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+sudo apt update
+sudo apt install -y apt-transport-https ca-certificates curl gnupg
 
 sudo mkdir -p /etc/apt/keyrings
 
@@ -166,8 +166,8 @@ curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key | sudo gpg --
 
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt update
+sudo apt install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable --now kubelet
 
@@ -239,6 +239,66 @@ k8s-base        (libvirt, 0, (amd64))
 We need 4 machines
 one master and 3 workers 
 ```
+## Create a custom pool
+> [!important]
+> make sure that you have enough storage in /var/ cuase the defualt storage pool is in /var/lib/libvirt/images
+
+```
+sudo virsh pool-info default 
+```
+
+```
+output:
+
+Name:           default
+UUID:           518f549e-d7aa-457e-b3c9-2fc6d2e2ef21
+State:          running
+Persistent:     yes
+Autostart:      no
+Capacity:       674.08 GiB
+Allocation:     563.92 GiB
+Available:      110.16 GiB
+```
+
+> [!note]
+> if you dont have enough storage in defualt dir you can make new storage pool in KVM/Libvirt like this
+
+```
+sudo mkdir -p $CUSTOM_PATH
+sudo virsh pool-define-as vmstorage dir --target $CUSTOM_PATH
+sudo virsh pool-build vmstorage
+sudo virsh pool-start vmstorage
+sudo virsh pool-autostart vmstorage
+
+sudo virsh pool-info vmstorage
+```
+```
+output:
+
+Name:           vmstorage
+UUID:           907581e0-3ca2-46e3-a374-22168f8aedea
+.
+.
+Available:      244.91 GiB
+```
+
+#### and then you can us it in vagrantfile like this 
+
+```ruby
+
+     # VM resources
+      n.vm.provider :libvirt do |lv|
+        lv.storage_pool_name = "vmstorage"
+        lv.memory = node["mem"]
+        lv.cpus = node["cpus"]
+      end
+
+```
+
+
+
+
+
 
 ## Create a network 
 

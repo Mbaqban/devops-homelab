@@ -8,7 +8,7 @@ in a real infrastructure environment.
 
 ## Roadmap
 
-* [x] **Step 1 — Debian 13 Host**</br>
+* [x] **[Step 1 — Debian 13 Host](./step-01-Host/README.md)**</br>
   Prepare the Debian 13 host system as the foundation for the homelab.
 
 * [x] **[Step 2 — KVM / QEMU / libvirt](./step-02-kvm/README.md)**</br>

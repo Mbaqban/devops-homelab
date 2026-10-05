@@ -1,18 +1,17 @@
 k8s_network: k8s-net
+vagrant_k8s_image: "k8s-base"
 pod_cidr: "10.244.0.0/16"
-
 control_plane_endpoint: "192.168.56.20:6443"
-
+pubkey: "/home/mbaqban/.ssh/id_rsa.pub"
 kube_vip_version: "v1.2.3"
-
 flannel_manifest_url: "https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml"
-
-
+metric_manifest_url: "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+custom_vm_storage: "vmstorage"
 nodes:
   - name: k8s-master
     ip: 192.168.56.10
     cpus: 2
-    mem: 2048
+    mem: 2048 
     master: true
 
   - name: k8s-master2
