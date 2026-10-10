@@ -6,3 +6,5 @@ TODOS
 *inventory.ini
 *.box
 *nodes.yaml
+*.config
+*ansible.cfg 
