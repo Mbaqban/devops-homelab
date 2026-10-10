@@ -1,30 +1,17 @@
 ---
-# Everything in one file. Put it next to env.yml and run:
-#   ansible-playbook k8s-cluster-all-in-one.yml
-#
-# 1. reads env.yml and writes inventory.ini (also loads the hosts in memory)
-# 2. prepares the nodes, runs kubeadm init on the first master (kube-vip + Flannel)
-# 3. joins the other masters (one by one), then the workers
-# Assumes kubeadm, kubelet, kubectl and a container runtime are already installed.
-
-# ---------------------------------------------------------------------------
-- name: Read env.yml, create inventory.ini and load the hosts
+- name: create inventory
   hosts: localhost
   connection: local
   gather_facts: false
   vars_files:
-    - /home/mbaqban/Projects/env/nodes.yaml
+    - ../env/nodes.yaml
   vars:
-    ssh_user: vagrant
-    ssh_private_key: /home/mbaqban/.ssh/id_ed25519
+    ssh_user: "{{ssh_user}}"
+    ssh_private_key: "{{ pubkey }}"
     masters: "{{ nodes | selectattr('master') | list }}"
     workers: "{{ nodes | rejectattr('master') | list }}"
-  tasks:
-    - name: Make sure there is at least one master
-      ansible.builtin.assert:
-        that: masters | length > 0
-        fail_msg: "env.yml needs at least one node with master: true"
 
+  tasks:
     - name: Write inventory.ini
       ansible.builtin.copy:
         dest: "{{ playbook_dir }}/inventory.ini"
@@ -101,7 +88,7 @@
   become: true
   gather_facts: true
   vars_files:
-    - /home/mbaqban/Projects/env/nodes.yaml
+    - ../env/nodes.yaml
   tasks:
     - name: Detect the interface that carries this node's IP
       ansible.builtin.set_fact:
@@ -119,40 +106,16 @@
         dest: /etc/default/kubelet
         content: "KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}\n"
         mode: "0644"
-
-      
-# ---------------------------------------------------------------------------
-- name: Create containerd CNI binary directory
-  hosts: k8s
-  become: true
-  tasks:
-    # your existing preparation tasks...
-
-    - name: Create containerd CNI binary directory
-      ansible.builtin.file:
-        path: /usr/lib/cni
-        state: directory
-        mode: "0755"
-
-    - name: Link CNI plugins for containerd
-      ansible.builtin.shell:
-        cmd: "ln -sf /opt/cni/bin/* /usr/lib/cni/"
-      changed_when: false
-
-    - name: Restart containerd
-      ansible.builtin.systemd:
-        name: containerd
-        state: restarted
-
+        
 # ---------------------------------------------------------------------------
 - name: Bootstrap the first control-plane node
   hosts: first_master
   become: true
   vars_files:
-    - /home/mbaqban/Projects/env/nodes.yaml
+    - ../env/nodes.yaml
   vars:
     # kube-vip static pod; kube_vip_kubeconfig is set per task below
-    control_plane_endpoint: "192.168.56.20:6443"
+    control_plane_endpoint: "{{control_plane_endpoint}}"
     kube_vip_manifest: &kube_vip_manifest |
       apiVersion: v1
       kind: Pod
@@ -357,7 +320,7 @@
   become: true
   serial: 1
   vars_files:
-    - /home/mbaqban/Projects/env/nodes.yaml
+    - ../env/nodes.yaml
   vars:
     first: "{{ groups['first_master'][0] }}"
     kube_vip_manifest: *kube_vip_manifest
