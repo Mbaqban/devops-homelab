@@ -69,7 +69,12 @@ TriggeredBy: ● libvirtd-admin.socket
 ```bash
 sudo usermod -aG libvirt $USER
 sudo usermod -aG kvm $USER
+```
 
+>[!important]
+> you should reboot your host
+
+```
 sudo reboot
 ```
 
