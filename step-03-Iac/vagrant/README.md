@@ -31,7 +31,7 @@ Vagrant 2.4.9
 ## Install kvm vagrant plugins
 
 ```bash
-sudo apt install -y ruby-libvirt build-essential libxml2-dev libxslt1-dev zlib1g-dev
+sudo apt install -y ruby-libvirt build-essential libxml2-dev libxslt1-dev zlib1g-dev libvirt-dev
 
 vagrant plugin install vagrant-libvirt
 
@@ -143,12 +143,12 @@ containerd config default | sudo tee /etc/containerd/config.toml
 # By setting SystemdCgroup = true in containerd’s config, we make containerd use the same cgroup driver (systemd) as kubelet and the OS itself — keeping everything consistent and avoiding those conflicts.
 
 sudo nano /etc/containerd/config.toml
-
-
+```
+```bash
 change -> SystemdCgroup = true
 chabge -> bin_dir = "/opt/cni/bin"
-
-
+```
+```bash 
 sudo systemctl restart containerd
 sudo systemctl enable containerd
 ```

@@ -138,6 +138,7 @@ default   active   yes         yes
 - Check KVM acceleration
 
 ```bash
+# TODO : couldnt we check it sooner ? befor reboot 
 sudo apt install -y cpu-checker
 sudo kvm-ok
 ```
